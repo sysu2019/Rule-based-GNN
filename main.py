@@ -369,6 +369,8 @@ def argument():
 	# seed to control generaing random variables
 	p.add_argument('--seed',        '-seed',default=0,      type=int)
 
+	p.add_argument('--AModule_size',        '-AM',  default=1,      type=int)
+
 	args = p.parse_args()
 	return args
 
