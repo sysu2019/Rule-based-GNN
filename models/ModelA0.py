@@ -10,9 +10,6 @@ import sys,random
 import numpy as np
 import os
 
-global en
-en = defaultdict(set)
-
 class Module(chainer.Chain):
 	def __init__(self, dim, dropout_rate, activate, isR, isBN):
 		super(Module, self).__init__(
@@ -111,9 +108,11 @@ class Tunnel(chainer.Chain):
 				result.append(x)
 			else:			
 				# result.append(sum(xxs)/len(xxs))
-				x=sum(xxs)/len(xxs) # x为pooling后实体embedding,xxs为邻居embedding做relu后的结果
+				# x为pooling后实体embedding,xxs为邻居embedding做relu后的结果
+				x=sum(xxs)/len(xxs) # x.shape=(1,200)
 				x=self.forwardAA(x,xxs) # (x, xxs)=(entity, neighbors)
 				result.append(x)
+
 		return result
 
 	def sumpooling(self,xs,neighbor):
@@ -287,8 +286,9 @@ class Attention(chainer.Chain):
 
 			es[j]=[0 for i in range(len(neighbors))]
 			for n in range(len(neighbors)):
-				es[j][n]=getattr(self,name)(entity,neighbors[n])
-			es[j][0]=F.softmax(F.concat(es[j]),axis=1)
+				es[j][n]=getattr(self,name)(entity,neighbors[n])  # variable([[-0.x]])
+			es[j][0]=F.softmax(F.concat(es[j]),axis=1) # shape=(1, len(neighbors))
+
 		for j in range(self.AModule_size-1):
 			es[0][0]=es[0][0]+es[j+1][0]
 		es[0][0]=es[0][0]/self.AModule_size
@@ -297,10 +297,14 @@ class Attention(chainer.Chain):
 		return aentity
 		
 	def attentionpooling(self,neighbors,es):
+		# es.shape=(1, len(neighbors))
+		# neighbors.shape=(len(neighbors), 1, dim)
+		aentity=0
 		for i in range(len(neighbors)):
-			exm=[es[0][i].reshape(1,1) for j in range(neighbors[i].shape[1])]
-			exm=F.concat(exm,axis=0)
-			aentity=neighbors[i]*exm
+			exm=[es[0][i].reshape(1,1) for j in range(neighbors[i].shape[1])]  # shape=(dim,1,1)
+			exm=F.concat(exm,axis=1)  # exm.shape=(1,dim)
+			aentity+=neighbors[i]*exm  # neighbors[i].shape=(1,dim)
+			# aentity.shape=(1,dim)
 		return aentity
 
 class Model(chainer.Chain):
@@ -326,6 +330,7 @@ class Model(chainer.Chain):
 		self.objective_function = args.objective_function
 		self.is_bound_wr = args.is_bound_wr
 		self.AModule_size = args.AModule_size
+
 		if args.use_gpu: self.to_gpu()
 
 
@@ -406,6 +411,7 @@ class Model(chainer.Chain):
 		# x为entities经过传播模型所得的embedding
 		x = self.get_context(entities,links,relations,edges,0,xp)
 		x = F.split_axis(x,len(entities),axis=0)
+
 		edict = dict()
 		for e,x in zip(entities,x):
 			edict[e]=x
